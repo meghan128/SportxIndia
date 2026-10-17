@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "prisma generate && next build",
+  "installCommand": "bun install",
+  "env": {
+    "ADMIN_PASSWORD": "Change this to a strong password",
+    "RESEND_API_KEY": "Optional: for newsletter email delivery"
+  }
+}
