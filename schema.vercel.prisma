@@ -1,0 +1,160 @@
+// SportX India — Prisma schema
+// Sports journalism CMS with content-integrity / anti-piracy features.
+// Local dev: SQLite. Production (Vercel): PostgreSQL — see schema.vercel.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Author {
+  id          String   @id @default(cuid())
+  login       String   @unique
+  email       String
+  displayName String
+  firstName   String?
+  lastName    String?
+  bio         String?
+  role        String   @default("contributor") // contributor | editor | owner
+  createdAt   DateTime @default(now())
+  posts       Post[]
+}
+
+model Category {
+  id    String @id @default(cuid())
+  slug  String @unique
+  name  String
+  posts Post[]
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  slug  String @unique
+  name  String
+  posts Post[]
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  wpId        String?  @unique
+  slug        String   @unique
+  title       String
+  excerpt     String?
+  content     String   // sanitized HTML
+  contentPlain String  // plain text for search + hashing
+  contentHash String   // SHA-256 of contentPlain — integrity fingerprint
+  coverSeed   String   // deterministic seed for generated cover art
+  thumbnailUrl String? // optional real sports photo URL
+  readMinutes Int      @default(5)
+  authorId    String
+  author      Author   @relation(fields: [authorId], references: [id])
+  categories  Category[]
+  tags        Tag[]
+  publishedAt DateTime
+  importedAt  DateTime @default(now())
+  // moderation / security
+  status      String   @default("published") // published | quarantined | pending
+  moderationScore Int  @default(0)            // 0-100, higher = riskier
+  moderationReasons String @default("")       // JSON array string of flags
+  featured    Boolean  @default(false)
+  views       Int      @default(0)
+
+  incidents   SecurityIncident[]
+  reports     ContentReport[]
+
+  @@index([status])
+  @@index([publishedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String   // import | moderate | resolve | report | verify | view
+  actor      String   // system | owner | moderator | anonymous
+  targetType String   // post | incident | report | system
+  targetId   String?
+  message    String
+  severity   String   @default("info") // info | warning | critical
+  metadata   String   @default("{}") // JSON string
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}
+
+model SecurityIncident {
+  id         String   @id @default(cuid())
+  postId     String
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type       String   // spam_injection | keyword_match | future_dated | off_topic | manual
+  severity   String   @default("high") // low | medium | high | critical
+  reason     String
+  status     String   @default("open") // open | resolved | ignored
+  detectedAt DateTime @default(now())
+  resolvedAt DateTime?
+  resolvedBy String?
+  resolution String?
+
+  @@index([status])
+}
+
+model ContentReport {
+  id             String   @id @default(cuid())
+  reporterName   String
+  reporterEmail  String
+  infringingUrl  String
+  postId         String?
+  post           Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  description    String
+  status         String   @default("open") // open | investigating | resolved | dismissed
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+}
+
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  source    String   @default("footer") // footer | reader | modal
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// ===== CMS Admin =====
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+// ===== Ad Zones =====
+
+model AdZone {
+  id        String   @id @default(cuid())
+  slot      String   @unique // header | sidebar | in-article | footer
+  name      String
+  adCode    String?  // AdSense snippet or custom HTML
+  active    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== Newsletter Campaigns =====
+
+model NewsletterCampaign {
+  id        String   @id @default(cuid())
+  subject   String
+  body      String   // HTML email content
+  status    String   @default("draft") // draft | sent
+  sentAt    DateTime?
+  sentCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
